@@ -1,5 +1,5 @@
 // MyMap.jsx
-import React, { useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Menu from "./Menu";
 import {
   GoogleMap,
@@ -23,7 +23,21 @@ function MyMap() {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [directions, setDirections] = useState(null);
+  const mapRef = useRef(null);
+  const [location, setLocation] = useState(defaultCenter);
+// MyMap.jsx or wherever you're using <LoadScript>
+const LIBRARIES = ["places"]; // ✅ Declare once and reuse
 
+  // 📍 Handle location from input selection
+ useEffect(() => {
+  if (location && mapRef.current && !directions) {
+    mapRef.current.panTo(location);
+    mapRef.current.setZoom(14);
+  }
+}, [location, directions]);
+
+
+  // 🧭 Handle route search
   const handleSearch = () => {
     if (!origin || !destination) {
       alert("Please enter both origin and destination");
@@ -32,48 +46,83 @@ function MyMap() {
 
     const directionsService = new window.google.maps.DirectionsService();
 
-    directionsService.route(
-      {
-        origin,
-        destination,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === "OK") {
-          setDirections(result);
-        } else {
-          alert("Could not find directions: " + status);
-        }
+directionsService.route(
+  {
+    origin,
+    destination,
+    travelMode: window.google.maps.TravelMode.DRIVING,
+  },
+  (result, status) => {
+    if (status === "OK") {
+      setDirections(result);
+
+      const bounds = new window.google.maps.LatLngBounds();
+      result.routes[0].overview_path.forEach((point) => {
+        bounds.extend(point);
+      });
+
+      if (mapRef.current) {
+        mapRef.current.fitBounds(bounds); // ✅ auto zoom to fit route
       }
-    );
+    } else {
+      alert("Could not find directions: " + status);
+    }
+  }
+);
+
   };
 
   return (
     <>
-       <Menu />
+      <Menu />
+
       <MapSearchBox
         from={origin}
         to={destination}
         setFrom={setOrigin}
         setTo={setDestination}
         onSearch={handleSearch}
+        onSelect={setLocation}
       />
 
-      <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+      <LoadScript
+        googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
+        libraries={LIBRARIES}
+      >
         <GoogleMap
+          ref={mapRef}
+          onLoad={(map) => (mapRef.current = map)}
           mapContainerStyle={containerStyle}
-          center={defaultCenter}
-          zoom={12}
-          options={{
-            minZoom: 6,
-            maxZoom: 18,
-            fullscreenControl: false,
-            mapTypeControl: false
+         center={directions ? undefined : location}
+          zoom={14}
+        options={{
+  minZoom: 6,
+  maxZoom: 20,
+  fullscreenControl: false,
+  mapTypeControl: false,
+  gestureHandling: "greedy",       // ✅ allow dragging and zooming
+  disableDefaultUI: false,         // ✅ enable zoom buttons
+  zoomControl: true,               // ✅ allow zoom control
+  draggable: true,                 // ✅ allow mouse drag
+}}
 
-          }}
         >
-          {directions && <DirectionsRenderer directions={directions} />}
-          {!directions && <Marker position={defaultCenter} />}
+          {/* Route Directions */}
+          {directions && (
+            <DirectionsRenderer
+              directions={directions}
+              options={{
+                polylineOptions: {
+                  strokeColor: "#1E90FF", // Darker visible color
+                  strokeOpacity: 0.9,
+                  strokeWeight: 6,
+                },
+              }}
+            />
+          )}
+
+          {/* Location Marker */}
+          {!directions && location && <Marker position={location} />}
         </GoogleMap>
       </LoadScript>
     </>
