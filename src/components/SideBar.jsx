@@ -15,8 +15,8 @@ import "../App.css";
 
 
 
-const Sidebar = ({ isOpen, onClose }) => {
-  const [traffice, setTraffice] = useState(false);
+const Sidebar = ({ isOpen, onClose , showTraffic , setShowTraffic }) => {
+ 
   const [report, setReports] = useState(false);
   const [ShowWaze, setShowWaze] = useState(false);
   const [Checkgarbage, setCheckGarbage] = useState(false);
@@ -58,15 +58,15 @@ const Sidebar = ({ isOpen, onClose }) => {
           </h3>
           </div>
           <button
-             checked={traffice}
-          onClick={() => setTraffice(!traffice)}
+             checked={showTraffic}
+            onClick={() => setShowTraffic(!showTraffic)}
             className={`relative inline-flex h-[20px] w-[47px] items-center rounded-full transition-colors duration-300 ${
-              traffice ? "bg-blue-600" : "bg-gray-500"
+              showTraffic ? "bg-blue-600" : "bg-gray-500"
             }`}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${
-                traffice ? "translate-x-6" : "translate-x-1"
+                showTraffic ? "translate-x-6" : "translate-x-1"
               }`}
             />
           </button>

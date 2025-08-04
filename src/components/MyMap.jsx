@@ -24,6 +24,7 @@ function MyMap() {
   const [destination, setDestination] = useState("");
   const [directions, setDirections] = useState(null);
   const mapRef = useRef(null);
+   const [showTraffic, setShowTraffic] = useState(false)
   const [location, setLocation] = useState(defaultCenter);
 // MyMap.jsx or wherever you're using <LoadScript>
 const LIBRARIES = ["places"]; // ✅ Declare once and reuse
@@ -71,6 +72,21 @@ directionsService.route(
 );
 
   };
+  useEffect(() => {
+  let trafficLayer;
+
+  if (mapRef.current && showTraffic) {
+    trafficLayer = new window.google.maps.TrafficLayer();
+    trafficLayer.setMap(mapRef.current);
+  }
+
+  return () => {
+    if (trafficLayer) {
+      trafficLayer.setMap(null); // remove on cleanup
+    }
+  };
+}, [showTraffic]);
+
 
   return (
     <>
@@ -83,6 +99,8 @@ directionsService.route(
         setTo={setDestination}
         onSearch={handleSearch}
         onSelect={setLocation}
+          showTraffic={showTraffic}
+  setShowTraffic={setShowTraffic}
       />
 
       <LoadScript

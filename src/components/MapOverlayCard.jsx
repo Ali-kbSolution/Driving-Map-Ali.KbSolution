@@ -7,7 +7,7 @@ import { LuArrowUpDown } from "react-icons/lu";
 import { FaLocationCrosshairs } from "react-icons/fa6";
 import Sidebar from "./SideBar";
 
-function MapSearchBox({ from, to, setFrom, setTo, onSearch, onSelect }) {
+function MapSearchBox({ from, to, setFrom, setTo, onSearch, onSelect , showTraffic , setShowTraffic }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeInput, setActiveInput] = useState("from");
   const [inputValue, setInputValue] = useState("");
@@ -167,7 +167,13 @@ const handleChooseLocation = () => {
 
   return (
     <>
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <Sidebar
+  isOpen={sidebarOpen}
+  onClose={() => setSidebarOpen(false)}
+  showTraffic={showTraffic}
+  setShowTraffic={setShowTraffic}
+/>
+
       <div className="absolute top-2 left-2 z-30 rounded-2xl w-[370px] bg-white shadow-xl border border-gray-200 p-4 space-y-3">
         {/* Header */}
         <div className="flex items-center gap-20 ml-3">
