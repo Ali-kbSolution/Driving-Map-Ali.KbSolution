@@ -1,13 +1,14 @@
 // MyMap.jsx
-import React, { useRef, useState, useEffect } from "react";
-import Menu from "./Menu";
+import React, { useRef, useState, useEffect, useCallback } from "react";
+
 import {
   GoogleMap,
   LoadScript,
   Marker,
   DirectionsRenderer,
 } from "@react-google-maps/api";
-import MapSearchBox from "./MapOverlayCard"; // adjust path if needed
+import Menu from "./Menu";
+import MapSearchBox from "./MapOverlayCard"; // bottom card
 
 const containerStyle = {
   width: "100%",
@@ -19,119 +20,215 @@ const defaultCenter = {
   lng: 73.0479,
 };
 
+const LIBRARIES = ["places"];
+
 function MyMap() {
+
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
-  const [directions, setDirections] = useState(null);
-  const mapRef = useRef(null);
-   const [showTraffic, setShowTraffic] = useState(false)
   const [location, setLocation] = useState(defaultCenter);
-// MyMap.jsx or wherever you're using <LoadScript>
-const LIBRARIES = ["places"]; // ✅ Declare once and reuse
+  const [showTraffic, setShowTraffic] = useState(false);
+ const [directions, setDirections] = useState(null);
+const [routes, setRoutes] = useState([]);
+const [originInfo, setOriginInfo] = useState(null);
+const [destinationInfo, setDestinationInfo] = useState(null);
+const [routeInfo, setRouteInfo] = useState(null);
 
-  // 📍 Handle location from input selection
- useEffect(() => {
-  if (location && mapRef.current && !directions) {
+
+const mapRef = useRef(null); // 👈 Map ref
+
+const onLoad = useCallback((map) => {
+  mapRef.current = map;
+}, []);
+
+const panTo = (location) => {
+  if (mapRef.current && location) {
     mapRef.current.panTo(location);
-    mapRef.current.setZoom(14);
+    mapRef.current.setZoom(15); // or whatever zoom
   }
-}, [location, directions]);
+};
 
-
-  // 🧭 Handle route search
-  const handleSearch = () => {
-    if (!origin || !destination) {
-      alert("Please enter both origin and destination");
-      return;
-    }
-
-    const directionsService = new window.google.maps.DirectionsService();
-
-directionsService.route(
-  {
-    origin,
-    destination,
-    travelMode: window.google.maps.TravelMode.DRIVING,
-  },
-  (result, status) => {
-    if (status === "OK") {
-      setDirections(result);
-
-      const bounds = new window.google.maps.LatLngBounds();
-      result.routes[0].overview_path.forEach((point) => {
-        bounds.extend(point);
-      });
-
-      if (mapRef.current) {
-        mapRef.current.fitBounds(bounds); // ✅ auto zoom to fit route
-      }
-    } else {
-      alert("Could not find directions: " + status);
-    }
-  }
-);
-
-  };
+  // Pan map when location changes (only before directions are shown)
   useEffect(() => {
-  let trafficLayer;
-
-  if (mapRef.current && showTraffic) {
-    trafficLayer = new window.google.maps.TrafficLayer();
-    trafficLayer.setMap(mapRef.current);
-  }
-
-  return () => {
-    if (trafficLayer) {
-      trafficLayer.setMap(null); // remove on cleanup
+    if (location && mapRef.current && !directions) {
+      mapRef.current.panTo(location);
+      mapRef.current.setZoom(14);
     }
-  };
-}, [showTraffic]);
+  }, [location, directions]);
 
+  // 🚗 Search for directions + place info
+const handleSearch = async (fromLocation, toLocation) => {
+  if (!fromLocation || !toLocation) return;
+
+  const directionsService = new window.google.maps.DirectionsService();
+  const placesService = new window.google.maps.places.PlacesService(
+    document.createElement("div")
+  );
+
+  directionsService.route(
+    {
+      origin: fromLocation,
+      destination: toLocation,
+      travelMode: window.google.maps.TravelMode.DRIVING,
+    },
+    async (result, status) => {
+      if (status === "OK") {
+        setDirections(result);
+        setRoutes(result.routes);
+
+        const leg = result?.routes?.[0]?.legs?.[0];
+        if (!leg) {
+          console.error("Leg not found in directions");
+          return;
+        }
+
+        const originLocation = leg.start_location;
+        const destinationLocation = leg.end_location;
+
+        const fetchPlaceDetails = (query, callback) => {
+          placesService.findPlaceFromQuery(
+            {
+              query,
+              fields: [
+                "name",
+                "formatted_address",
+                "geometry",
+                "photos",
+                "rating",
+                "user_ratings_total",
+              ],
+            },
+            (results, placeStatus) => {
+              if (
+                placeStatus === window.google.maps.places.PlacesServiceStatus.OK &&
+                results.length > 0
+              ) {
+                const place = results[0];
+                const photos =
+                  place.photos?.map((p) =>
+                    p.getUrl({ maxWidth: 400, maxHeight: 300 })
+                  ) || [];
+
+                callback({
+                  name: place.name,
+                  address: place.formatted_address,
+                  location: place.geometry?.location,
+                  rating: place.rating,
+                  totalRatings: place.user_ratings_total,
+                  photos,
+                });
+              } else {
+                console.error("Place not found:", query);
+                callback(null);
+              }
+            }
+          );
+        };
+
+        fetchPlaceDetails(fromLocation.name || fromLocation, (originInfo) => {
+          if (originInfo) {
+            setOriginInfo(originInfo);
+
+            fetchPlaceDetails(toLocation.name || toLocation, (destinationInfo) => {
+              if (destinationInfo) {
+                setDestinationInfo(destinationInfo);
+
+                setRouteInfo({
+                  name: destinationInfo.name,
+                  address: destinationInfo.address,
+                  distance: leg.distance.text,
+                  duration: leg.duration.text,
+                  location: destinationLocation,
+                  rating: destinationInfo.rating,
+                  totalRatings: destinationInfo.totalRatings,
+                  photos: destinationInfo.photos,
+                });
+
+                const bounds = new window.google.maps.LatLngBounds();
+                result.routes[0].overview_path.forEach((point) =>
+                  bounds.extend(point)
+                );
+                mapRef.current.fitBounds(bounds);
+              }
+            });
+          }
+        });
+      } else {
+        alert("Could not find directions: " + status);
+      }
+    }
+  );
+};
+
+
+  // 🚦 Toggle traffic layer
+  useEffect(() => {
+    let trafficLayer;
+
+    if (mapRef.current && showTraffic) {
+      trafficLayer = new window.google.maps.TrafficLayer();
+      trafficLayer.setMap(mapRef.current);
+    }
+
+    return () => {
+      if (trafficLayer) {
+        trafficLayer.setMap(null);
+      }
+    };
+  }, [showTraffic]);
 
   return (
     <>
       <Menu />
 
-      <MapSearchBox
-        from={origin}
-        to={destination}
-        setFrom={setOrigin}
-        setTo={setDestination}
-        onSearch={handleSearch}
-        onSelect={setLocation}
-          showTraffic={showTraffic}
+ <MapSearchBox
+  from={origin}
+  to={destination}
+  setFrom={setOrigin}
+  setTo={setDestination}
+  onSearch={handleSearch}
+  onSelect={setLocation}
+  showTraffic={showTraffic}
   setShowTraffic={setShowTraffic}
-      />
+  routeInfo={routeInfo} // ⬅️ important
+  //  selectedPlaceInfo={selectedPlaceInfo}
+   routes={routes}
+   hasRoute={!!directions}
+    onLoad={onLoad}
+    panTo={panTo}
+    originInfo={originInfo}
+    destinationInfo={destinationInfo}
+/>
+
+
 
       <LoadScript
         googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
         libraries={LIBRARIES}
       >
         <GoogleMap
-          ref={mapRef}
-          onLoad={(map) => (mapRef.current = map)}
           mapContainerStyle={containerStyle}
-         center={directions ? undefined : location}
+          onLoad={(map) => (mapRef.current = map)}
+          ref={mapRef}
+          center={directions ? undefined : location}
           zoom={14}
-        options={{
-  minZoom: 6,
-  maxZoom: 20,
-  fullscreenControl: false,
-  mapTypeControl: false,
-  gestureHandling: "greedy",       // ✅ allow dragging and zooming
-  disableDefaultUI: false,         // ✅ enable zoom buttons
-  zoomControl: true,               // ✅ allow zoom control
-  draggable: true,                 // ✅ allow mouse drag
-}}
-
+          options={{
+            minZoom: 6,
+            maxZoom: 20,
+            fullscreenControl: false,
+            mapTypeControl: false,
+            gestureHandling: "greedy",
+            disableDefaultUI: false,
+            zoomControl: true,
+            draggable: true,
+          }}
         >
-          {/* Route Directions */}
           {directions && (
             <DirectionsRenderer
               directions={directions}
               options={{
                 polylineOptions: {
-                  strokeColor: "#1E90FF", // Darker visible color
+                  strokeColor: "#1E90FF",
                   strokeOpacity: 0.9,
                   strokeWeight: 6,
                 },
@@ -139,7 +236,6 @@ directionsService.route(
             />
           )}
 
-          {/* Location Marker */}
           {!directions && location && <Marker position={location} />}
         </GoogleMap>
       </LoadScript>

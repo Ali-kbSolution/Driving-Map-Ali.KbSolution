@@ -1,25 +1,25 @@
 // src/components/Sidebar.jsx
-import { useState } from "react";
+// import { useState } from "react";
 import { FaAngleDoubleLeft } from "react-icons/fa";
-import { MdReport } from "react-icons/md";
-import waze from "../img/waze.png"
-import garbage from "../img/garbage-truck.png"
+// import { MdReport } from "react-icons/md";
+// import waze from "../img/waze.png"
+// import garbage from "../img/garbage-truck.png"
 import car from "../img/traffic.png"
-import embed from "../img/left-and-right.png"
-import edit from "../img/edit.png"
-import about from "../img/help.png"
-import partner from "../img/partners.png"
-import language from "../img/translate.png"
-import support from "../img/info.png"
+// import embed from "../img/left-and-right.png"
+// import edit from "../img/edit.png"
+// import about from "../img/help.png"
+// import partner from "../img/partners.png"
+// import language from "../img/translate.png"
+// import support from "../img/info.png"
 import "../App.css";
 
 
 
 const Sidebar = ({ isOpen, onClose , showTraffic , setShowTraffic }) => {
  
-  const [report, setReports] = useState(false);
-  const [ShowWaze, setShowWaze] = useState(false);
-  const [Checkgarbage, setCheckGarbage] = useState(false);
+  // const [report, setReports] = useState(false);
+  // const [ShowWaze, setShowWaze] = useState(false);
+  // const [Checkgarbage, setCheckGarbage] = useState(false);
 
   if (!isOpen) return null;
 
@@ -72,7 +72,7 @@ const Sidebar = ({ isOpen, onClose , showTraffic , setShowTraffic }) => {
           </button>
         </div>
 
-          <div className="flex justify-between  items-center px-5">
+          {/* <div className="flex justify-between  items-center px-5">
            <div className="flex items-center w-[244px]">
           <div className="car text-[25px] text-yellow-500">
            <MdReport />
@@ -180,7 +180,7 @@ Support</h4>
              </div>
           </div>
 
-          <hr />
+          <hr /> */}
       </div>
     </>
   );
