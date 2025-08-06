@@ -33,7 +33,8 @@ const [routes, setRoutes] = useState([]);
 const [originInfo, setOriginInfo] = useState(null);
 const [destinationInfo, setDestinationInfo] = useState(null);
 const [routeInfo, setRouteInfo] = useState(null);
-
+const [map, setMap] = useState(null);
+  const userMarkerRef = useRef(null);
 
 const mapRef = useRef(null); // 👈 Map ref
 
@@ -65,100 +66,128 @@ const handleSearch = async (fromLocation, toLocation) => {
     document.createElement("div")
   );
 
-  directionsService.route(
-    {
-      origin: fromLocation,
-      destination: toLocation,
-      travelMode: window.google.maps.TravelMode.DRIVING,
-    },
-    async (result, status) => {
-      if (status === "OK") {
-        setDirections(result);
-        setRoutes(result.routes);
+ directionsService.route(
+  {
+    origin: fromLocation,
+    destination: toLocation,
+    travelMode: window.google.maps.TravelMode.DRIVING,
+  },
+  async (result, status) => {
+    if (status === "OK") {
+      setDirections(result);
+      setRoutes(result.routes);
 
-        const leg = result?.routes?.[0]?.legs?.[0];
-        if (!leg) {
-          console.error("Leg not found in directions");
-          return;
-        }
-
-        const originLocation = leg.start_location;
-        const destinationLocation = leg.end_location;
-
-        const fetchPlaceDetails = (query, callback) => {
-          placesService.findPlaceFromQuery(
-            {
-              query,
-              fields: [
-                "name",
-                "formatted_address",
-                "geometry",
-                "photos",
-                "rating",
-                "user_ratings_total",
-              ],
-            },
-            (results, placeStatus) => {
-              if (
-                placeStatus === window.google.maps.places.PlacesServiceStatus.OK &&
-                results.length > 0
-              ) {
-                const place = results[0];
-                const photos =
-                  place.photos?.map((p) =>
-                    p.getUrl({ maxWidth: 400, maxHeight: 300 })
-                  ) || [];
-
-                callback({
-                  name: place.name,
-                  address: place.formatted_address,
-                  location: place.geometry?.location,
-                  rating: place.rating,
-                  totalRatings: place.user_ratings_total,
-                  photos,
-                });
-              } else {
-                console.error("Place not found:", query);
-                callback(null);
-              }
-            }
-          );
-        };
-
-        fetchPlaceDetails(fromLocation.name || fromLocation, (originInfo) => {
-          if (originInfo) {
-            setOriginInfo(originInfo);
-
-            fetchPlaceDetails(toLocation.name || toLocation, (destinationInfo) => {
-              if (destinationInfo) {
-                setDestinationInfo(destinationInfo);
-
-                setRouteInfo({
-                  name: destinationInfo.name,
-                  address: destinationInfo.address,
-                  distance: leg.distance.text,
-                  duration: leg.duration.text,
-                  location: destinationLocation,
-                  rating: destinationInfo.rating,
-                  totalRatings: destinationInfo.totalRatings,
-                  photos: destinationInfo.photos,
-                });
-
-                const bounds = new window.google.maps.LatLngBounds();
-                result.routes[0].overview_path.forEach((point) =>
-                  bounds.extend(point)
-                );
-                mapRef.current.fitBounds(bounds);
-              }
-            });
-          }
-        });
-      } else {
-        alert("Could not find directions: " + status);
+      const leg = result?.routes?.[0]?.legs?.[0];
+      if (!leg) {
+        console.error("Leg not found in directions");
+        return;
       }
+
+      const originLocation = leg.start_location;
+      const destinationLocation = leg.end_location;
+
+      const fetchPlaceDetails = (query, callback) => {
+        placesService.findPlaceFromQuery(
+          {
+            query,
+            fields: [
+              "place_id",
+              "name",
+              "formatted_address",
+              "geometry",
+            ],
+          },
+          (results, placeStatus) => {
+            if (
+              placeStatus === window.google.maps.places.PlacesServiceStatus.OK &&
+              results.length > 0
+            ) {
+              const place = results[0];
+              const request = {
+                placeId: place.place_id,
+                fields: [
+                  "name",
+                  "formatted_address",
+                  "geometry",
+                  "photos",
+                  "rating",
+                  "user_ratings_total",
+                ],
+              };
+
+              placesService.getDetails(request, (details, detailsStatus) => {
+                if (
+                  detailsStatus === window.google.maps.places.PlacesServiceStatus.OK &&
+                  details
+                ) {
+                  const photos =
+                    details.photos?.slice(0, 6).map((p) =>
+                      p.getUrl({ maxWidth: 500, maxHeight: 400 })
+                    ) || [];
+
+                  callback({
+                    name: details.name,
+                    address: details.formatted_address,
+                    location: details.geometry?.location,
+                    rating: details.rating,
+                    totalRatings: details.user_ratings_total,
+                    photos,
+                  });
+                } else {
+                  console.error("Place details not found:", detailsStatus);
+                  callback(null);
+                }
+              });
+            } else {
+              console.error("Place not found from query:", query);
+              callback(null);
+            }
+          }
+        );
+      };
+
+      // Fetch origin info
+      fetchPlaceDetails(fromLocation.name || fromLocation, (originInfo) => {
+        if (originInfo) {
+          setOriginInfo(originInfo);
+
+          // Fetch destination info
+          fetchPlaceDetails(toLocation.name || toLocation, (destinationInfo) => {
+            if (destinationInfo) {
+              setDestinationInfo(destinationInfo);
+
+              // Set final route info
+              setRouteInfo({
+                name: destinationInfo.name,
+                address: destinationInfo.address,
+                distance: leg.distance.text,
+                duration: leg.duration.text,
+                location: destinationLocation,
+                rating: destinationInfo.rating,
+                totalRatings: destinationInfo.totalRatings,
+                photos: destinationInfo.photos,
+                origin: originLocation,
+              });
+
+              // Fit map bounds
+              const bounds = new window.google.maps.LatLngBounds();
+              result.routes[0].overview_path.forEach((point) =>
+                bounds.extend(point)
+              );
+              mapRef.current.fitBounds(bounds);
+            }
+          });
+        }
+      });
+    } else {
+      alert("Could not find directions: " + status);
     }
-  );
+  }
+);
+
 };
+
+
 
 
   // 🚦 Toggle traffic layer
@@ -177,6 +206,41 @@ const handleSearch = async (fromLocation, toLocation) => {
     };
   }, [showTraffic]);
 
+
+
+  useEffect(() => {
+    if (map && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const pos = { lat: latitude, lng: longitude };
+
+          // User ka marker show karo
+          const marker = new window.google.maps.Marker({
+            position: pos,
+            map,
+            title: "You are here",
+            icon: {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 7,
+              fillColor: "#4285F4",
+              fillOpacity: 1,
+              strokeWeight: 2,
+              strokeColor: "#ffffff",
+            },
+          });
+
+          userMarkerRef.current = marker;
+
+          // Map ko pehle center kar do user pe (but auto follow off)
+          map.setCenter(pos);
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+        }
+      );
+    }
+  }, [map]);
   return (
     <>
       <Menu />
@@ -205,15 +269,16 @@ const handleSearch = async (fromLocation, toLocation) => {
       <LoadScript
         googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
         libraries={LIBRARIES}
-      >
+      > 
+      
         <GoogleMap
           mapContainerStyle={containerStyle}
-          onLoad={(map) => (mapRef.current = map)}
+          // onLoad={(map) => (mapRef.current = map)}
           ref={mapRef}
           center={directions ? undefined : location}
-          zoom={14}
+          zoom={10}
           options={{
-            minZoom: 6,
+            minZoom: 8,
             maxZoom: 20,
             fullscreenControl: false,
             mapTypeControl: false,
@@ -221,8 +286,14 @@ const handleSearch = async (fromLocation, toLocation) => {
             disableDefaultUI: false,
             zoomControl: true,
             draggable: true,
+            enableHighAccuracy : true 
           }}
+          onLoad={(mapInstance) => {
+    mapRef.current = mapInstance;   // ✅ set ref
+    setMap(mapInstance);            // ✅ set state
+  }}
         >
+          
           {directions && (
             <DirectionsRenderer
               directions={directions}
@@ -237,6 +308,7 @@ const handleSearch = async (fromLocation, toLocation) => {
           )}
 
           {!directions && location && <Marker position={location} />}
+         
         </GoogleMap>
       </LoadScript>
     </>

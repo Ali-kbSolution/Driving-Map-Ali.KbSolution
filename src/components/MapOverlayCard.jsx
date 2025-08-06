@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { IoMdMenu } from "react-icons/io";
 import { MdMyLocation } from "react-icons/md";
 import { GrLocation } from "react-icons/gr";
@@ -22,7 +22,7 @@ function MapSearchBox({
   hasRoute ,
   routeInfo,
 destinationInfo ,
-originInfo
+originInfo ,
 
 }) {
   console.log("Origin Info:", originInfo);
@@ -30,11 +30,13 @@ console.log("Destination Info:", destinationInfo);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeInput, setActiveInput] = useState("from");
+
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [keyboardIndex, setKeyboardIndex] = useState(-1);
   const [fromLocation, setFromLocation] = useState(null);
   const [toLocation, setToLocation] = useState(null);
+  
 
   useEffect(() => {
     if (!inputValue) {
@@ -44,7 +46,7 @@ console.log("Destination Info:", destinationInfo);
 
     const service = new window.google.maps.places.AutocompleteService();
     service.getPlacePredictions(
-      { input: inputValue, componentRestrictions: { country: "pk" } },
+      { input: inputValue },
       (predictions, status) => {
         if (status === window.google.maps.places.PlacesServiceStatus.OK) {
           setSuggestions(predictions);
@@ -55,17 +57,40 @@ console.log("Destination Info:", destinationInfo);
     );
   }, [inputValue]);
 
-  const selectSuggestion = (suggestion) => {
-    const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ placeId: suggestion.place_id }, (results, status) => {
-      if (status === "OK" && results[0]) {
-        const location = results[0].geometry.location;
+
+
+
+const selectSuggestion = (suggestion) => {
+  const placesService = new window.google.maps.places.PlacesService(
+    document.createElement("div")
+  );
+
+  placesService.getDetails(
+    {
+      placeId: suggestion.place_id,
+      fields: [
+        "name",
+        "formatted_address",
+        "geometry",
+        "photos",
+        "rating",
+        "user_ratings_total",
+        "reviews",
+      ],
+    },
+    (place, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
         const latLng = {
-          lat: location.lat(),
-          lng: location.lng(),
-          name: suggestion.description,
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+          name: place.name,
+          address: place.formatted_address,
+          photos: place.photos?.map((p) => p.getUrl()),
+          rating: place.rating,
+          totalRatings: place.user_ratings_total,
+          reviews: place.reviews,
         };
-setInputValue(suggestion.description);
+
         if (activeInput === "from") {
           setFrom(suggestion.description);
           setFromLocation(latLng);
@@ -76,31 +101,36 @@ setInputValue(suggestion.description);
           if (fromLocation) onSearch(fromLocation, latLng);
         }
 
-        
         setSuggestions([]);
         setKeyboardIndex(-1);
-        
-        if (onSelect) onSelect(latLng);
-      }
-    });
-  };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "ArrowDown") {
-      setKeyboardIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
-    } else if (e.key === "ArrowUp") {
-      setKeyboardIndex((prev) => Math.max(prev - 1, 0));
-    } else if (e.key === "Enter") {
-      if (keyboardIndex >= 0 && suggestions[keyboardIndex]) {
-        e.preventDefault();
-        selectSuggestion(suggestions[keyboardIndex]);
-        setSuggestions([])
+        if (onSelect) onSelect(latLng);
+      } else {
+        console.error("Place details fetch failed:", status);
+        alert("Failed to get location details. Try again.");
       }
-    } else if (e.key === "Escape") {
-      setSuggestions([]);
-      setKeyboardIndex(-1);
     }
-  };
+  );
+};
+
+ const handleKeyDown = (e) => {
+  if (e.key === "ArrowDown") {
+    setKeyboardIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+  } else if (e.key === "ArrowUp") {
+    setKeyboardIndex((prev) => Math.max(prev - 1, 0));
+  } else if (e.key === "Enter") {
+    if (keyboardIndex >= 0 && suggestions[keyboardIndex]) {
+      e.preventDefault();
+      selectSuggestion(suggestions[keyboardIndex]);
+setInputValue(suggestions[keyboardIndex].description);
+      // ✅ Correct this line:
+      setSuggestions([]); // not ""
+    }
+  } else if (e.key === "Escape") {
+    setSuggestions([]);
+    setKeyboardIndex(-1);
+  }
+};
 
   const handleSwap = () => {
     setFrom(to);
@@ -166,10 +196,10 @@ setInputValue(suggestion.description);
      <div
       className={`${
         hasRoute
-          ? "fixed top-0 bottom-0 left-0 w-96 rounded-none"
-          : "absolute top-4 left-4 rounded-2xl"
-      } bg-white  shadow-lg z-20  transition-all overflow-y-auto overflow-hidden duration-300 p-4 w-[360px]`}
-    >      <div className="flex items-center gap-20 ml-3">
+          ? "fixed top-0 bottom-0 left-0 w-[400px] rounded-none p-3"
+          : "absolute top-4 left-4 rounded-2xl "
+      } bg-white  shadow-lg z-20  transition-all overflow-y-auto overflow-hidden duration-300 py-3 px-2 w-[380px]`}
+    >      <div className="flex items-center gap-20 ml-3 mb-3">
           <button onClick={() => setSidebarOpen(true)}>
             <IoMdMenu className="text-black text-xl font-medium" />
           </button>
@@ -196,7 +226,7 @@ setInputValue(suggestion.description);
                 value={activeInput === "from" ? inputValue : from}
                 onFocus={() => {
                   setActiveInput("from");
-                  setInputValue(from);
+                   setInputValue(from);
                 }}
                 onChange={(e) => {
     setFrom(e.target.value);
@@ -204,7 +234,7 @@ setInputValue(suggestion.description);
     setInputValue(e.target.value)
   }}
                 onKeyDown={handleKeyDown}
-                className="flex-1 bg-transparent text-sm text-gray-800 ml-2 placeholder-gray-400 focus:outline-none"
+                className="flex-1 bg-transparent text-sm px-3 text-gray-500  placeholder-gray-300 focus:outline-none "
               />
             </div>
 
@@ -217,9 +247,13 @@ setInputValue(suggestion.description);
                   setActiveInput("to");
                   setInputValue(to);
                 }}
-                onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+    setTo(e.target.value);
+    setActiveInput("to");
+    setInputValue(e.target.value)
+  }}
                 onKeyDown={handleKeyDown}
-                className="flex-1 bg-transparent text-sm text-gray-800 ml-2 placeholder-gray-400 focus:outline-none"
+                className="flex-1 bg-transparent text-sm text-gray-500 ml-2 placeholder-gray-300 focus:outline-none"
               />
             </div>
           </div>
@@ -257,7 +291,7 @@ setInputValue(suggestion.description);
             ))}
           </div>
         )}
-
+  
 {hasRoute && routeInfo && (
 <BottomLocationPanel
   info={routeInfo}
